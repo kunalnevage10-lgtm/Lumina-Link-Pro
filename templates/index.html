@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Lumina-Link Pro | 10GB/min</title>
+    <style>
+        :root { --lavender: #E6E6FA; --lavender-mid: #B57EDC; --dark-bg: #1A1A2E; --card-bg: #222240; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--dark-bg); color: white; text-align: center; padding: 50px 20px; }
+        .container { display: flex; justify-content: center; gap: 25px; flex-wrap: wrap; margin-top: 30px; }
+        .card { background: var(--card-bg); border: 1px solid rgba(181, 126, 220, 0.2); border-radius: 15px; padding: 35px; width: 400px; min-height: 500px; }
+        .btn { border: none; padding: 15px; border-radius: 10px; width: 100%; font-weight: bold; cursor: pointer; text-transform: uppercase; margin-top: 10px; }
+        .btn-green { background: linear-gradient(135deg, var(--lavender), var(--lavender-mid)); color: #1A1A2E; }
+        .btn-blue { border: 2px solid var(--lavender); background: transparent; color: var(--lavender); }
+        #qr-result img { margin-top: 25px; border: 10px solid white; border-radius: 12px; max-width: 200px; }
+        #video { width: 100%; border-radius: 12px; display: none; margin-top: 20px; border: 3px solid var(--lavender-mid); }
+    </style>
+</head>
+<body>
+    <h1>LUMINA-LINK PRO 🚀</h1>
+    <div class="container">
+        <div class="card">
+            <h2>💻 Sender</h2>
+            <input type="file" id="fileInput">
+            <button class="btn btn-green" id="uploadBtn">UPLOAD & GENERATE QR</button>
+            <div id="qr-result"></div>
+            <button id="whatsappBtn" style="display:none;" class="btn btn-blue">SHARE VIA WHATSAPP 📱</button>
+        </div>
+        <div class="card">
+            <h2>📱 Receiver</h2>
+            <button class="btn btn-blue" id="startScan">START SCANNER</button>
+            <input type="file" id="qrFromGallery" accept="image/*" style="display:none;">
+            <button class="btn" style="background:#444;" onclick="document.getElementById('qrFromGallery').click()">CHOOSE FROM GALLERY 🖼️</button>
+            <video id="video"></video>
+            <canvas id="canvas" style="display:none;"></canvas>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script>
+        let currentLink = "";
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        uploadBtn.onclick = async () => {
+            const file = document.getElementById('fileInput').files[0];
+            if(!file) return alert("Select file!");
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/upload', {method: 'POST', body: formData});
+            const data = await res.json();
+            if(data.qr_path) {
+                currentLink = data.raw_link;
+                document.getElementById('qr-result').innerHTML = `<img src="${data.qr_path}">`;
+                document.getElementById('whatsappBtn').style.display = 'block';
+            }
+        };
+
+        document.getElementById('whatsappBtn').onclick = () => {
+            window.open(`https://api.whatsapp.com/send?text=Download fast: ${currentLink}`, '_blank');
+        };
+
+        // Scanner & Gallery Logic
+        const video = document.getElementById('video');
+        document.getElementById('startScan').onclick = () => {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(stream => {
+                video.srcObject = stream; video.style.display = 'block'; video.play();
+                requestAnimationFrame(tick);
+            });
+        };
+
+        function tick() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.height = video.videoHeight; canvas.width = video.videoWidth;
+                ctx.drawImage(video, 0, 0);
+                const code = jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data, canvas.width, canvas.height);
+                if (code) { window.location.href = code.data; return; }
+            }
+            requestAnimationFrame(tick);
+        }
+
+        document.getElementById('qrFromGallery').onchange = (e) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width; canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    const code = jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data, canvas.width, canvas.height);
+                    if (code) window.location.href = code.data;
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        };
+    </script>
+</body>
+</html>
